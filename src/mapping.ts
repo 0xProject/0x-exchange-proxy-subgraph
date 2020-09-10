@@ -53,42 +53,42 @@ export function handleTransformedERC20(event: TransformedERC20): void {
 
     fill.comparisons = [];
     let comparisons = fill.comparisons;
-    comparisons.push(
-        createComparison(
-            "Uniswap",
-            normalizeTokenAddress(event.params.inputToken),
-            normalizeTokenAddress(event.params.outputToken),
-            event.params.inputTokenAmount,
-            event
-        )
-    );
-    comparisons.push(
-        createComparison(
-            "UniswapV2",
-            normalizeTokenAddress(event.params.inputToken),
-            normalizeTokenAddress(event.params.outputToken),
-            event.params.inputTokenAmount,
-            event
-        )
-    );
-    comparisons.push(
-        createComparison(
-            "Kyber",
-            normalizeTokenAddress(event.params.inputToken),
-            normalizeTokenAddress(event.params.outputToken),
-            event.params.inputTokenAmount,
-            event
-        )
-    );
-    comparisons.push(
-        createComparison(
-            "Eth2Dai",
-            normalizeTokenAddress(event.params.inputToken),
-            normalizeTokenAddress(event.params.outputToken),
-            event.params.inputTokenAmount,
-            event
-        )
-    );
+    //comparisons.push(
+    //    createComparison(
+    //        "Uniswap",
+    //        normalizeTokenAddress(event.params.inputToken),
+    //        normalizeTokenAddress(event.params.outputToken),
+    //        event.params.inputTokenAmount,
+    //        event
+    //    )
+    //);
+    //comparisons.push(
+    //    createComparison(
+    //        "UniswapV2",
+    //        normalizeTokenAddress(event.params.inputToken),
+    //        normalizeTokenAddress(event.params.outputToken),
+    //        event.params.inputTokenAmount,
+    //        event
+    //    )
+    //);
+    //comparisons.push(
+    //    createComparison(
+    //        "Kyber",
+    //        normalizeTokenAddress(event.params.inputToken),
+    //        normalizeTokenAddress(event.params.outputToken),
+    //        event.params.inputTokenAmount,
+    //        event
+    //    )
+    //);
+    //comparisons.push(
+    //    createComparison(
+    //        "Eth2Dai",
+    //        normalizeTokenAddress(event.params.inputToken),
+    //        normalizeTokenAddress(event.params.outputToken),
+    //        event.params.inputTokenAmount,
+    //        event
+    //    )
+    //);
     fill.comparisons = comparisons;
     fill.save();
 
