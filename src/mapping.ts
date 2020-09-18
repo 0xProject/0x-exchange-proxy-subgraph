@@ -1,9 +1,8 @@
 import { Address, BigInt, ethereum } from "@graphprotocol/graph-ts";
-import { ERC20 } from "../generated/ITransformERC20/ERC20";
-import { ERC20SymbolBytes } from "../generated/ITransformERC20/ERC20SymbolBytes";
 import { IERC20BridgeSampler } from "../generated/ITransformERC20/IERC20BridgeSampler";
 import { TransformedERC20 } from "../generated/ITransformERC20/ITransformERC20";
 import { Fill, FillComparison, Token, Transaction } from "../generated/schema";
+import { fetchTokenDecimals, fetchTokenSymbol } from "./helpers";
 
 const WETH_ADDRESS = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
 const SAMPLER_ADDRESS = "0xd8c38704c9937ea3312de29f824b4ad3450a5e61";
@@ -145,56 +144,4 @@ function createComparison(
     comparison.outputTokenAmount = outputAmount;
     comparison.save();
     return comparison.id;
-}
-
-// https://github.com/Uniswap/uniswap-v2-subgraph/blob/master/src/mappings/helpers.ts
-export function isNullEthValue(value: string): boolean {
-    return (
-        value ==
-        "0x0000000000000000000000000000000000000000000000000000000000000001"
-    );
-}
-
-export function fetchTokenSymbol(tokenAddress: Address): string {
-    if (
-        tokenAddress.toHexString() ==
-        "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-    ) {
-        return "ETH";
-    }
-    let contract = ERC20.bind(tokenAddress);
-    let contractSymbolBytes = ERC20SymbolBytes.bind(tokenAddress);
-    // try types string and bytes32 for symbol
-    let symbolValue = "unknown";
-    let symbolResult = contract.try_symbol();
-    if (symbolResult.reverted) {
-        let symbolResultBytes = contractSymbolBytes.try_symbol();
-        if (!symbolResultBytes.reverted) {
-            // for broken pairs that have no symbol function exposed
-            if (!isNullEthValue(symbolResultBytes.value.toHexString())) {
-                symbolValue = symbolResultBytes.value.toString();
-            }
-        }
-    } else {
-        symbolValue = symbolResult.value;
-    }
-
-    return symbolValue;
-}
-
-export function fetchTokenDecimals(tokenAddress: Address): BigInt {
-    if (
-        tokenAddress.toHexString() ==
-        "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-    ) {
-        return BigInt.fromI32(18);
-    }
-    let contract = ERC20.bind(tokenAddress);
-    // try types uint8 for decimals
-    let decimalValue = null;
-    let decimalResult = contract.try_decimals();
-    if (!decimalResult.reverted) {
-        decimalValue = decimalResult.value;
-    }
-    return BigInt.fromI32(decimalValue as i32);
 }
