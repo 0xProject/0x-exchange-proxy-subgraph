@@ -1,8 +1,13 @@
-import { BigInt } from '@graphprotocol/graph-ts';
+import { Address, BigInt } from '@graphprotocol/graph-ts';
 import { Swap } from '../../generated/templates/UniswapPair/Pair';
 import { Fill, Transaction, Token, UniswapPair as Pair } from '../../generated/schema';
 
+const EXCHANGE_PROXY_ADDRESS = '0xdef1c0ded9bec7f1a1670819833240f027b25eff';
+
 export function handleSwap(event: Swap): void {
+    if (event.params.sender !== Address.fromString(EXCHANGE_PROXY_ADDRESS)) {
+        return;
+    }
     let transaction = Transaction.load(event.transaction.hash.toHexString());
     if (transaction === null) {
         transaction = new Transaction(event.transaction.hash.toHexString());
@@ -16,6 +21,7 @@ export function handleSwap(event: Swap): void {
     fill.timestamp = event.block.timestamp;
     fill.taker = event.params.to;
     fill.comparisons = [];
+    fill.source = "UniswapV2"; // enum FillSource
 
     // summarize input and output amounts
     let pair = Pair.load(event.address.toHexString());

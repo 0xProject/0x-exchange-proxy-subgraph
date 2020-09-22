@@ -30,6 +30,7 @@ export function handleNewPair(event: PairCreated): void {
             log.debug('mybug the decimal on token 0 was null', []);
             return;
         }
+        token0.decimals = decimals;
         token0.totalVolume = BigInt.fromI32(0);
     }
 
@@ -38,7 +39,6 @@ export function handleNewPair(event: PairCreated): void {
         token1 = new Token(event.params.token1.toHexString());
         token1.symbol = fetchTokenSymbol(event.params.token1);
         let decimals = fetchTokenDecimals(event.params.token1);
-
         // bail if we couldn't figure out the decimals
         if (decimals === null) {
             return;

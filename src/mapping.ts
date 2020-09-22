@@ -1,7 +1,7 @@
 import { Address, BigInt, ethereum } from "@graphprotocol/graph-ts";
 import { IERC20BridgeSampler } from "../generated/ITransformERC20/IERC20BridgeSampler";
 import { TransformedERC20 } from "../generated/ITransformERC20/ITransformERC20";
-import { Fill, FillComparison, Token, Transaction } from "../generated/schema";
+import { Fill, FillComparison, Token, Transaction} from "../generated/schema";
 import { fetchTokenDecimals, fetchTokenSymbol } from "./helpers";
 
 const WETH_ADDRESS = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
@@ -49,6 +49,7 @@ export function handleTransformedERC20(event: TransformedERC20): void {
     fill.inputTokenAmount = event.params.inputTokenAmount;
     fill.outputToken = outputToken.id;
     fill.outputTokenAmount = event.params.outputTokenAmount;
+    fill.source = "ExchangeProxy"; // enum FillSource
 
     fill.comparisons = [];
     let comparisons = fill.comparisons;
