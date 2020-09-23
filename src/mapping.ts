@@ -1,11 +1,11 @@
-import { Address, BigInt, ethereum } from "@graphprotocol/graph-ts";
-import { IERC20BridgeSampler } from "../generated/ITransformERC20/IERC20BridgeSampler";
-import { TransformedERC20 } from "../generated/ITransformERC20/ITransformERC20";
-import { Fill, FillComparison, Token, Transaction} from "../generated/schema";
-import { fetchTokenDecimals, fetchTokenSymbol } from "./helpers";
+import { Address, BigInt, ethereum } from '@graphprotocol/graph-ts';
+import { IERC20BridgeSampler } from '../generated/ITransformERC20/IERC20BridgeSampler';
+import { TransformedERC20 } from '../generated/ITransformERC20/ITransformERC20';
+import { Fill, FillComparison, Token, Transaction } from '../generated/schema';
+import { fetchTokenDecimals, fetchTokenSymbol } from './helpers';
 
-const WETH_ADDRESS = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
-const SAMPLER_ADDRESS = "0xd8c38704c9937ea3312de29f824b4ad3450a5e61";
+const WETH_ADDRESS = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
+const SAMPLER_ADDRESS = '0xd8c38704c9937ea3312de29f824b4ad3450a5e61';
 const sampler = IERC20BridgeSampler.bind(Address.fromString(SAMPLER_ADDRESS));
 
 export function handleTransformedERC20(event: TransformedERC20): void {
@@ -31,25 +31,19 @@ export function handleTransformedERC20(event: TransformedERC20): void {
         outputToken.decimals = fetchTokenDecimals(event.params.outputToken);
         outputToken.totalVolume = BigInt.fromI32(0);
     }
-    inputToken.totalVolume = event.params.inputTokenAmount.plus(
-        inputToken.totalVolume
-    );
-    outputToken.totalVolume = event.params.outputTokenAmount.plus(
-        outputToken.totalVolume
-    );
+    inputToken.totalVolume = event.params.inputTokenAmount.plus(inputToken.totalVolume);
+    outputToken.totalVolume = event.params.outputTokenAmount.plus(outputToken.totalVolume);
     inputToken.save();
     outputToken.save();
 
-    let fill = new Fill(
-        event.transaction.hash.toHex() + "-" + event.logIndex.toString()
-    );
+    let fill = new Fill(event.transaction.hash.toHex() + '-' + event.logIndex.toString());
     fill.timestamp = event.block.timestamp;
     fill.taker = event.params.taker;
     fill.inputToken = inputToken.id;
     fill.inputTokenAmount = event.params.inputTokenAmount;
     fill.outputToken = outputToken.id;
     fill.outputTokenAmount = event.params.outputTokenAmount;
-    fill.source = "ExchangeProxy"; // enum FillSource
+    fill.source = 'ExchangeProxy'; // enum FillSource
 
     fill.comparisons = [];
     let comparisons = fill.comparisons;
@@ -100,7 +94,7 @@ export function handleTransformedERC20(event: TransformedERC20): void {
 }
 
 function normalizeTokenAddress(token: Address): Address {
-    if (token.toHexString() == "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee") {
+    if (token.toHexString() == '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee') {
         return Address.fromString(WETH_ADDRESS);
     }
     return token;
@@ -111,35 +105,20 @@ function createComparison(
     takerToken: Address,
     makerToken: Address,
     takerAmount: BigInt,
-    event: ethereum.Event
+    event: ethereum.Event,
 ): string {
     let outputAmount = BigInt.fromI32(0);
-    if (source == "Uniswap") {
-        outputAmount = sampler.sampleSellsFromUniswap(takerToken, makerToken, [
-            takerAmount,
-        ])[0];
-    } else if (source == "UniswapV2") {
-        outputAmount = sampler.sampleSellsFromUniswapV2(
-            [takerToken, makerToken],
-            [takerAmount]
-        )[0];
-    } else if (source == "Kyber") {
-        outputAmount = sampler.sampleSellsFromKyberNetwork(
-            takerToken,
-            makerToken,
-            [takerAmount]
-        )[0];
-    } else if (source == "Eth2Dai") {
-        outputAmount = sampler.sampleSellsFromEth2Dai(takerToken, makerToken, [
-            takerAmount,
-        ])[0];
+    if (source == 'Uniswap') {
+        outputAmount = sampler.sampleSellsFromUniswap(takerToken, makerToken, [takerAmount])[0];
+    } else if (source == 'UniswapV2') {
+        outputAmount = sampler.sampleSellsFromUniswapV2([takerToken, makerToken], [takerAmount])[0];
+    } else if (source == 'Kyber') {
+        outputAmount = sampler.sampleSellsFromKyberNetwork(takerToken, makerToken, [takerAmount])[0];
+    } else if (source == 'Eth2Dai') {
+        outputAmount = sampler.sampleSellsFromEth2Dai(takerToken, makerToken, [takerAmount])[0];
     }
     const comparison = new FillComparison(
-        event.transaction.hash.toHex() +
-            "-" +
-            event.logIndex.toString() +
-            "-" +
-            source
+        event.transaction.hash.toHex() + '-' + event.logIndex.toString() + '-' + source,
     );
     comparison.source = source;
     comparison.outputTokenAmount = outputAmount;

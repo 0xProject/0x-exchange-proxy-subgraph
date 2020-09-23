@@ -1,6 +1,6 @@
 import { BigInt, log } from '@graphprotocol/graph-ts';
 import { PairCreated } from '../../generated/UniswapFactory/Factory';
-import { Pair as PairTemplate } from '../../generated/templates/UniswapPair/Pair';
+import { UniswapPair as PairTemplate } from '../../generated/templates';
 import { fetchTokenSymbol, fetchTokenDecimals } from '../helpers';
 import { Token, UniswapPair as Pair, UniswapFactory } from '../../generated/schema';
 
@@ -54,7 +54,7 @@ export function handleNewPair(event: PairCreated): void {
     pair.createdAtBlockNumber = event.block.number;
 
     // create the tracked contract based on the template
-    PairTemplate.bind(event.params.pair);
+    PairTemplate.create(event.params.pair);
 
     // save updated values
     token0.save();
