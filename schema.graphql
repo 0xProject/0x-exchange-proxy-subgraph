@@ -54,24 +54,9 @@ type Taker @entity {
     id: ID!
 }
 
-type UniswapPair @entity {
-  # pair address
-  id: ID!
-
-  # mirrored from the smart contract
-  token0: Token!
-  token1: Token!
-
-  # creation stats
-  createdAtTimestamp: BigInt!
-  createdAtBlockNumber: BigInt!
-
-}
-
-type UniswapFactory @entity {
-  # factory address
-  id: ID!
-
-  # pair info
-  pairCount: Int!
+type FirstIntermediateFill @entity {
+    # 1, only track the first fill and join with the last
+    id: ID!
+    inputToken: Token!
+    inputTokenAmount: BigInt!
 }
