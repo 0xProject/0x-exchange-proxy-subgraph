@@ -55,3 +55,26 @@ dataSources:
               - event: Swap(indexed address,uint256,uint256,uint256,uint256,indexed address)
                 handler: handleGenericSwap
           file: ./src/mapping.ts
+    - kind: ethereum/contract
+      name: ILiquidityProviderFeature
+      network: mainnet
+      source:
+          abi: LiquidityProviderFeature
+          startBlock: 11377458
+      mapping:
+          kind: ethereum/events
+          apiVersion: 0.0.4
+          language: wasm/assemblyscript
+          entities:
+              - Fill
+          abis:
+              - name: LiquidityProviderFeature
+                file: ./abis/LiquidityProviderFeature.json
+              - name: ERC20
+                file: ./abis/ERC20.json
+              - name: ERC20SymbolBytes
+                file: ./abis/ERC20SymbolBytes.json
+          eventHandlers:
+              - event: LiquidityProviderSwap(address,address,uint256,uint256,address,address)
+                handler: handleLiquidityProviderFeature
+          file: ./src/mapping.ts

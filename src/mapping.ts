@@ -1,22 +1,11 @@
-import { Address, BigInt, log } from '@graphprotocol/graph-ts';
+import { Address, BigInt, ethereum, log } from '@graphprotocol/graph-ts';
+import { LiquidityProviderSwap } from '../generated/ILiquidityProviderFeature/LiquidityProviderFeature';
 import { TransformedERC20 } from '../generated/ITransformERC20/ITransformERC20';
 import { Fill, FirstIntermediateFill, Token, Transaction } from '../generated/schema';
 import { Pair, Swap } from '../generated/templates/UniswapPair/Pair';
 import { fetchTokenDecimals, fetchTokenSymbol } from './helpers';
 
 const WETH_ADDRESS = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
-
-export function _tokenFindOrCreate(address: Address): Token {
-    let token = Token.load(address.toHexString());
-    if (token === null) {
-        token = new Token(address.toHexString());
-        token.symbol = fetchTokenSymbol(address);
-        token.decimals = fetchTokenDecimals(address);
-        token.totalVolume = BigInt.fromI32(0);
-    }
-    token.save();
-    return token!;
-}
 
 export function handleTransformedERC20(event: TransformedERC20): void {
     let transaction = Transaction.load(event.transaction.hash.toHexString());
@@ -169,4 +158,59 @@ export function handleGenericSwap(event: Swap): void {
     fills.push(fill.id);
     transaction.fills = fills;
     transaction.save();
+}
+
+export function handleLiquidityProviderFeature(event: LiquidityProviderSwap): void {
+    let transaction = _transactionFindOrCreate(event);
+    let inputToken = _tokenFindOrCreate(event.params.inputToken);
+    let outputToken = _tokenFindOrCreate(event.params.outputToken);
+
+    inputToken.totalVolume = event.params.inputTokenAmount.plus(inputToken.totalVolume);
+    outputToken.totalVolume = event.params.outputTokenAmount.plus(outputToken.totalVolume);
+    inputToken.save();
+    outputToken.save();
+
+    let fill = new Fill(event.transaction.hash.toHex() + '-' + event.logIndex.toString());
+    fill.timestamp = event.block.timestamp;
+    fill.taker = event.params.recipient;
+    fill.inputToken = inputToken.id;
+    fill.inputTokenAmount = event.params.inputTokenAmount;
+    fill.outputToken = outputToken.id;
+    fill.outputTokenAmount = event.params.outputTokenAmount;
+    fill.source = 'LiquidityProvider'; // enum FillSource
+
+    fill.comparisons = [];
+    let comparisons = fill.comparisons;
+    fill.comparisons = comparisons;
+    fill.save();
+
+    // Because we gotta make it dirty
+    let fills = transaction.fills;
+    fills.push(fill.id);
+    transaction.fills = fills;
+    transaction.save();
+}
+
+export function _transactionFindOrCreate(event: ethereum.Event): Transaction {
+    let transaction = Transaction.load(event.transaction.hash.toHexString());
+    if (transaction == null) {
+        transaction = new Transaction(event.transaction.hash.toHexString());
+        transaction.timestamp = event.block.timestamp;
+        transaction.blockNumber = event.block.number;
+        transaction.fills = [];
+    }
+    transaction.save();
+    return transaction!;
+}
+
+export function _tokenFindOrCreate(address: Address): Token {
+    let token = Token.load(address.toHexString());
+    if (token === null) {
+        token = new Token(address.toHexString());
+        token.symbol = fetchTokenSymbol(address);
+        token.decimals = fetchTokenDecimals(address);
+        token.totalVolume = BigInt.fromI32(0);
+    }
+    token.save();
+    return token!;
 }
