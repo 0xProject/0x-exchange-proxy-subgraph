@@ -5,6 +5,14 @@ enum ComparitiveSource {
     Eth2Dai
 }
 
+enum FillSource {
+    ExchangeProxy
+    Uniswap
+    UniswapV2
+    Sushiswap
+    LiquidityProvider
+}
+
 type Fill @entity {
     # tx hash - log index
     id: ID!
@@ -15,6 +23,7 @@ type Fill @entity {
     inputTokenAmount: BigInt!
     outputTokenAmount: BigInt!
     comparisons: [FillComparison]!
+    source: FillSource
 }
 
 type FillComparison @entity {
@@ -43,4 +52,11 @@ type Token @entity {
 type Taker @entity {
     # user address
     id: ID!
+}
+
+type FirstIntermediateFill @entity {
+    # 1, only track the first fill and join with the last
+    id: ID!
+    inputToken: Token!
+    inputTokenAmount: BigInt!
 }

@@ -1,6 +1,6 @@
 specVersion: 0.0.2
 description: 0x ExchangeProxy
-repository: https://github.com/graphprotocol/example-subgraph
+repository: https://github.com/0xProject/0x-exchange-proxy-subgraph
 schema:
     file: ./schema.graphql
 dataSources:
@@ -8,7 +8,7 @@ dataSources:
       name: ITransformERC20
       network: mainnet
       source:
-          address: "0xdef1c0ded9bec7f1a1670819833240f027b25eff"
+          address: '0xdef1c0ded9bec7f1a1670819833240f027b25eff'
           abi: ITransformERC20
           startBlock: 10415496
       mapping:
@@ -31,4 +31,27 @@ dataSources:
           eventHandlers:
               - event: TransformedERC20(indexed address,address,address,uint256,uint256)
                 handler: handleTransformedERC20
+          file: ./src/mapping.ts
+    - kind: ethereum/contract
+      name: ISwap
+      network: mainnet
+      source:
+          abi: Pair
+          startBlock: 10415496
+      mapping:
+          kind: ethereum/events
+          apiVersion: 0.0.4
+          language: wasm/assemblyscript
+          entities:
+              - Fill
+          abis:
+              - name: Pair
+                file: ./abis/Uniswap/Pair.json
+              - name: ERC20
+                file: ./abis/ERC20.json
+              - name: ERC20SymbolBytes
+                file: ./abis/ERC20SymbolBytes.json
+          eventHandlers:
+              - event: Swap(indexed address,uint256,uint256,uint256,uint256,indexed address)
+                handler: handleGenericSwap
           file: ./src/mapping.ts
