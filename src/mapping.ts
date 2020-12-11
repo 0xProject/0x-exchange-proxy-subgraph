@@ -1,12 +1,22 @@
-import { Address, BigInt, ethereum } from '@graphprotocol/graph-ts';
-import { IERC20BridgeSampler } from '../generated/ITransformERC20/IERC20BridgeSampler';
+import { Address, BigInt, log } from '@graphprotocol/graph-ts';
 import { TransformedERC20 } from '../generated/ITransformERC20/ITransformERC20';
-import { Fill, FillComparison, Token, Transaction } from '../generated/schema';
+import { Fill, FirstIntermediateFill, Token, Transaction } from '../generated/schema';
+import { Pair, Swap } from '../generated/templates/UniswapPair/Pair';
 import { fetchTokenDecimals, fetchTokenSymbol } from './helpers';
 
 const WETH_ADDRESS = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
-const SAMPLER_ADDRESS = '0xd8c38704c9937ea3312de29f824b4ad3450a5e61';
-const sampler = IERC20BridgeSampler.bind(Address.fromString(SAMPLER_ADDRESS));
+
+export function _tokenFindOrCreate(address: Address): Token {
+    let token = Token.load(address.toHexString());
+    if (token === null) {
+        token = new Token(address.toHexString());
+        token.symbol = fetchTokenSymbol(address);
+        token.decimals = fetchTokenDecimals(address);
+        token.totalVolume = BigInt.fromI32(0);
+    }
+    token.save();
+    return token!;
+}
 
 export function handleTransformedERC20(event: TransformedERC20): void {
     let transaction = Transaction.load(event.transaction.hash.toHexString());
@@ -17,20 +27,9 @@ export function handleTransformedERC20(event: TransformedERC20): void {
         transaction.fills = [];
     }
 
-    let inputToken = Token.load(event.params.inputToken.toHexString());
-    let outputToken = Token.load(event.params.outputToken.toHexString());
-    if (inputToken === null) {
-        inputToken = new Token(event.params.inputToken.toHexString());
-        inputToken.symbol = fetchTokenSymbol(event.params.inputToken);
-        inputToken.decimals = fetchTokenDecimals(event.params.inputToken);
-        inputToken.totalVolume = BigInt.fromI32(0);
-    }
-    if (outputToken === null) {
-        outputToken = new Token(event.params.outputToken.toHexString());
-        outputToken.symbol = fetchTokenSymbol(event.params.outputToken);
-        outputToken.decimals = fetchTokenDecimals(event.params.outputToken);
-        outputToken.totalVolume = BigInt.fromI32(0);
-    }
+    let inputToken = _tokenFindOrCreate(event.params.inputToken);
+    let outputToken = _tokenFindOrCreate(event.params.outputToken);
+
     inputToken.totalVolume = event.params.inputTokenAmount.plus(inputToken.totalVolume);
     outputToken.totalVolume = event.params.outputTokenAmount.plus(outputToken.totalVolume);
     inputToken.save();
@@ -47,42 +46,6 @@ export function handleTransformedERC20(event: TransformedERC20): void {
 
     fill.comparisons = [];
     let comparisons = fill.comparisons;
-    //comparisons.push(
-    //    createComparison(
-    //        "Uniswap",
-    //        normalizeTokenAddress(event.params.inputToken),
-    //        normalizeTokenAddress(event.params.outputToken),
-    //        event.params.inputTokenAmount,
-    //        event
-    //    )
-    //);
-    //comparisons.push(
-    //    createComparison(
-    //        "UniswapV2",
-    //        normalizeTokenAddress(event.params.inputToken),
-    //        normalizeTokenAddress(event.params.outputToken),
-    //        event.params.inputTokenAmount,
-    //        event
-    //    )
-    //);
-    //comparisons.push(
-    //    createComparison(
-    //        "Kyber",
-    //        normalizeTokenAddress(event.params.inputToken),
-    //        normalizeTokenAddress(event.params.outputToken),
-    //        event.params.inputTokenAmount,
-    //        event
-    //    )
-    //);
-    //comparisons.push(
-    //    createComparison(
-    //        "Eth2Dai",
-    //        normalizeTokenAddress(event.params.inputToken),
-    //        normalizeTokenAddress(event.params.outputToken),
-    //        event.params.inputTokenAmount,
-    //        event
-    //    )
-    //);
     fill.comparisons = comparisons;
     fill.save();
 
@@ -100,28 +63,110 @@ function normalizeTokenAddress(token: Address): Address {
     return token;
 }
 
-function createComparison(
-    source: string,
-    takerToken: Address,
-    makerToken: Address,
-    takerAmount: BigInt,
-    event: ethereum.Event,
-): string {
-    let outputAmount = BigInt.fromI32(0);
-    if (source == 'Uniswap') {
-        outputAmount = sampler.sampleSellsFromUniswap(takerToken, makerToken, [takerAmount])[0];
-    } else if (source == 'UniswapV2') {
-        outputAmount = sampler.sampleSellsFromUniswapV2([takerToken, makerToken], [takerAmount])[0];
-    } else if (source == 'Kyber') {
-        outputAmount = sampler.sampleSellsFromKyberNetwork(takerToken, makerToken, [takerAmount])[0];
-    } else if (source == 'Eth2Dai') {
-        outputAmount = sampler.sampleSellsFromEth2Dai(takerToken, makerToken, [takerAmount])[0];
+const EXCHANGE_PROXY_ADDRESS = '0xdef1c0ded9bec7f1a1670819833240f027b25eff';
+const UNISWAP_V2_FACTORY_ADDRESS = '0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa6f';
+const SUSHISWAP_FACTORY_ADDRESS = '0xc0aee478e3658e2610c5f7a4a2e1777ce9e4f2ac';
+
+export function handleGenericSwap(event: Swap): void {
+    if (event.params.sender.toHexString() != EXCHANGE_PROXY_ADDRESS) {
+        return;
     }
-    const comparison = new FillComparison(
-        event.transaction.hash.toHex() + '-' + event.logIndex.toString() + '-' + source,
-    );
-    comparison.source = source;
-    comparison.outputTokenAmount = outputAmount;
-    comparison.save();
-    return comparison.id;
+
+    let transaction = Transaction.load(event.transaction.hash.toHexString());
+    if (transaction === null) {
+        transaction = new Transaction(event.transaction.hash.toHexString());
+        transaction.timestamp = event.block.timestamp;
+        transaction.blockNumber = event.block.number;
+        transaction.fills = [];
+    }
+
+    // See if the address which emitted the swap event has a factory getter
+    let pair = Pair.bind(event.address);
+    let pairFactoryResult = pair.try_factory();
+    if (pairFactoryResult.reverted || pairFactoryResult.value == null) {
+        log.error('Unable to detect Uniswap like pair (no factory) {}', [event.address.toHexString()]);
+        return;
+    }
+    let token0Result = pair.try_token0();
+    let token1Result = pair.try_token1();
+    // If we cannot decode the tokens in the pair, bail
+    if (token0Result.reverted || token1Result.reverted || token0Result.value == null || token1Result.value == null) {
+        log.error('Unable to detect Uniswap like pair (no token0/1) {}', [event.address.toHexString()]);
+        return;
+    }
+
+    // If the recipient (to) is another Pair then this is a multi path swap
+    // we store the first half of the trade for later processing of subsequent Swap events
+    let toPair = Pair.bind(event.params.to);
+    let toPairFactoryResult = toPair.try_factory();
+    let isSwapAnIntermediateHop =
+        !toPairFactoryResult.reverted &&
+        (toPairFactoryResult.value.toHexString() == UNISWAP_V2_FACTORY_ADDRESS ||
+            toPairFactoryResult.value.toHexString() == SUSHISWAP_FACTORY_ADDRESS);
+    // Store the hop swap details for later, we only need to keep the input
+    if (isSwapAnIntermediateHop) {
+        let _firstHop = FirstIntermediateFill.load('1') || new FirstIntermediateFill('1');
+        _firstHop.inputToken =
+            event.params.amount0Out > BigInt.fromI32(0)
+                ? _tokenFindOrCreate(token1Result.value).id
+                : _tokenFindOrCreate(token0Result.value).id;
+        _firstHop.inputTokenAmount =
+            event.params.amount0Out > BigInt.fromI32(0) ? event.params.amount1In : event.params.amount0In;
+        _firstHop.save();
+        return;
+    }
+
+    // instantiate the fill
+    let fill = new Fill(event.transaction.hash.toHex() + '-' + event.logIndex.toString());
+    fill.timestamp = event.block.timestamp;
+    fill.taker = event.params.to;
+    fill.comparisons = [];
+
+    if (event.params.amount0Out > BigInt.fromI32(0)) {
+        fill.outputToken = _tokenFindOrCreate(token0Result.value).id;
+        fill.outputTokenAmount = event.params.amount0Out;
+        fill.inputToken = _tokenFindOrCreate(token1Result.value).id;
+        fill.inputTokenAmount = event.params.amount1In;
+    } else if (event.params.amount1Out > BigInt.fromI32(0)) {
+        fill.outputToken = _tokenFindOrCreate(token1Result.value).id;
+        fill.outputTokenAmount = event.params.amount1Out;
+        fill.inputToken = _tokenFindOrCreate(token0Result.value).id;
+        fill.inputTokenAmount = event.params.amount0In;
+    } else {
+        // this should never happen
+        log.error('UNISWAPV2: Swap event has invalid amounts, skipping', []);
+        return;
+    }
+
+    // Override input with the stored first hop iff it exists
+    let firstHop = FirstIntermediateFill.load('1');
+    if (firstHop != null && firstHop.inputTokenAmount != BigInt.fromI32(0)) {
+        fill.inputToken = firstHop.inputToken;
+        fill.inputTokenAmount = firstHop.inputTokenAmount;
+        // Clear it
+        firstHop.inputTokenAmount = BigInt.fromI32(0);
+        firstHop.save();
+    }
+
+    if (pairFactoryResult.value.toHexString() == UNISWAP_V2_FACTORY_ADDRESS) {
+        fill.source = 'UniswapV2';
+    } else if (pairFactoryResult.value.toHexString() == SUSHISWAP_FACTORY_ADDRESS) {
+        fill.source = 'Sushiswap';
+    } else {
+        log.info('unknown factory {} {} {}', [
+            event.address.toHexString(),
+            pairFactoryResult.value.toHexString(),
+            UNISWAP_V2_FACTORY_ADDRESS,
+            SUSHISWAP_FACTORY_ADDRESS,
+        ]);
+    }
+
+    // // save the fill
+    fill.save();
+
+    // // update the transaction
+    let fills = transaction.fills;
+    fills.push(fill.id);
+    transaction.fills = fills;
+    transaction.save();
 }
