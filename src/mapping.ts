@@ -1,20 +1,14 @@
 import { Address, BigInt, ethereum, log } from '@graphprotocol/graph-ts';
 import { LiquidityProviderSwap } from '../generated/ILiquidityProviderFeature/LiquidityProviderFeature';
 import { TransformedERC20 } from '../generated/ITransformERC20/ITransformERC20';
-import { Fill, FirstIntermediateFill, Token, Transaction } from '../generated/schema';
-import { Pair, Swap } from '../generated/templates/UniswapPair/Pair';
+import { Fill, FirstIntermediateFill, Token, Transaction, Taker } from '../generated/schema';
+import { Pair, Swap } from '../generated/ISwap/Pair';
 import { fetchTokenDecimals, fetchTokenSymbol } from './helpers';
 
 const WETH_ADDRESS = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
 
 export function handleTransformedERC20(event: TransformedERC20): void {
-    let transaction = Transaction.load(event.transaction.hash.toHexString());
-    if (transaction === null) {
-        transaction = new Transaction(event.transaction.hash.toHexString());
-        transaction.timestamp = event.block.timestamp;
-        transaction.blockNumber = event.block.number;
-        transaction.fills = [];
-    }
+    let transaction = _transactionFindOrCreate(event, event.params.taker);
 
     let inputToken = _tokenFindOrCreate(event.params.inputToken);
     let outputToken = _tokenFindOrCreate(event.params.outputToken);
@@ -60,14 +54,7 @@ export function handleGenericSwap(event: Swap): void {
     if (event.params.sender.toHexString() != EXCHANGE_PROXY_ADDRESS) {
         return;
     }
-
-    let transaction = Transaction.load(event.transaction.hash.toHexString());
-    if (transaction === null) {
-        transaction = new Transaction(event.transaction.hash.toHexString());
-        transaction.timestamp = event.block.timestamp;
-        transaction.blockNumber = event.block.number;
-        transaction.fills = [];
-    }
+    let transaction = _transactionFindOrCreate(event, event.params.to);
 
     // See if the address which emitted the swap event has a factory getter
     let pair = Pair.bind(event.address);
@@ -161,7 +148,7 @@ export function handleGenericSwap(event: Swap): void {
 }
 
 export function handleLiquidityProviderFeature(event: LiquidityProviderSwap): void {
-    let transaction = _transactionFindOrCreate(event);
+    let transaction = _transactionFindOrCreate(event, event.params.recipient);
     let inputToken = _tokenFindOrCreate(event.params.inputToken);
     let outputToken = _tokenFindOrCreate(event.params.outputToken);
 
@@ -191,9 +178,14 @@ export function handleLiquidityProviderFeature(event: LiquidityProviderSwap): vo
     transaction.save();
 }
 
-export function _transactionFindOrCreate(event: ethereum.Event): Transaction {
+export function _transactionFindOrCreate(event: ethereum.Event, takerAddress: Address): Transaction {
     let transaction = Transaction.load(event.transaction.hash.toHexString());
     if (transaction == null) {
+        if (takerAddress) {
+            let taker = _takerFindOrCreate(takerAddress);
+            taker.txCount = taker.txCount.plus(BigInt.fromI32(1));
+            taker.save();
+        }
         transaction = new Transaction(event.transaction.hash.toHexString());
         transaction.timestamp = event.block.timestamp;
         transaction.blockNumber = event.block.number;
@@ -213,4 +205,14 @@ export function _tokenFindOrCreate(address: Address): Token {
     }
     token.save();
     return token!;
+}
+
+export function _takerFindOrCreate(address: Address): Taker {
+    let taker = Taker.load(address.toHexString());
+    if (taker === null) {
+        taker = new Taker(address.toHexString());
+        taker.txCount = BigInt.fromI32(0);
+    }
+    taker.save();
+    return taker!;
 }
